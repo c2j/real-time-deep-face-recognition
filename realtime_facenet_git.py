@@ -19,13 +19,14 @@ import math
 import pickle
 from sklearn.svm import SVC
 from sklearn.externals import joblib
+import Constants
 
 print('Creating networks and loading parameters')
 with tf.Graph().as_default():
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
     sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
     with sess.as_default():
-        pnet, rnet, onet = detect_face.create_mtcnn(sess, './Path to det1.npy,..')
+        pnet, rnet, onet = detect_face.create_mtcnn(sess, '../facenet/src/align')
 
         minsize = 20  # minimum size of face
         threshold = [0.6, 0.7, 0.7]  # three steps's threshold
@@ -36,21 +37,22 @@ with tf.Graph().as_default():
         image_size = 182
         input_image_size = 160
 
-        HumanNames = ['Human_a','Human_b','Human_c','...','Human_h']    #train human name
+        #HumanNames = ['Anthony Hopkins','Chen JJ','Liu HJ','Liu YH']    #train human name
 
         print('Loading feature extraction model')
-        modeldir = '/..Path to pre-trained model../20170512-110547/20170512-110547.pb'
-        facenet.load_model(modeldir)
+        #modeldir = '../20170511-185253/20170511-185253.pb'
+        facenet.load_model(Constants.modeldir)
 
         images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
         embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
         phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         embedding_size = embeddings.get_shape()[1]
 
-        classifier_filename = '/..Path to classifier model../my_classifier.pkl'
+        classifier_filename = 'out_faces/my_classifier.pkl'
         classifier_filename_exp = os.path.expanduser(classifier_filename)
         with open(classifier_filename_exp, 'rb') as infile:
             (model, class_names) = pickle.load(infile)
+            HumanNames = class_names
             print('load classifier file-> %s' % classifier_filename_exp)
 
         video_capture = cv2.VideoCapture(0)
@@ -84,12 +86,14 @@ with tf.Graph().as_default():
                     det = bounding_boxes[:, 0:4]
                     img_size = np.asarray(frame.shape)[0:2]
 
-                    cropped = []
-                    scaled = []
-                    scaled_reshape = []
+                    
                     bb = np.zeros((nrof_faces,4), dtype=np.int32)
 
                     for i in range(nrof_faces):
+                        cropped = []
+                        scaled = []
+                        scaled_reshape = []
+                        
                         emb_array = np.zeros((1, embedding_size))
 
                         bb[i][0] = det[i][0]
@@ -112,18 +116,25 @@ with tf.Graph().as_default():
                         feed_dict = {images_placeholder: scaled_reshape[0], phase_train_placeholder: False}
                         emb_array[0, :] = sess.run(embeddings, feed_dict=feed_dict)
                         predictions = model.predict_proba(emb_array)
+                        #predictions = model.predict(emb_array)
+                        #best_class_indices = predictions
+                        #print(i, "Predictions:", predictions)
                         best_class_indices = np.argmax(predictions, axis=1)
+                        
                         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
                         cv2.rectangle(frame, (bb[i][0], bb[i][1]), (bb[i][2], bb[i][3]), (0, 255, 0), 2)    #boxing face
 
                         #plot result idx under box
                         text_x = bb[i][0]
                         text_y = bb[i][3] + 20
-                        # print('result: ', best_class_indices[0])
-                        for H_i in HumanNames:
-                            if HumanNames[best_class_indices[0]] == H_i:
-                                result_names = HumanNames[best_class_indices[0]]
-                                cv2.putText(frame, result_names, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                        print('result: ', best_class_indices[0])
+                        #for H_i in HumanNames:
+                        #    if HumanNames[best_class_indices[0]] == H_i:
+                        #        result_names = HumanNames[best_class_indices[0]]
+                        #        cv2.putText(frame, result_names, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                        #                    1, (0, 0, 255), thickness=1, lineType=2)
+                        result_names = HumanNames[best_class_indices[0]]
+                        cv2.putText(frame, result_names, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,
                                             1, (0, 0, 255), thickness=1, lineType=2)
                 else:
                     print('Unable to align')

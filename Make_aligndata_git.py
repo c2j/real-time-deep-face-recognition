@@ -13,22 +13,23 @@ import detect_face
 import random
 from time import sleep
 
-output_dir_path = '/..Path to output folder../'
+output_dir_path = 'out_faces/'
 output_dir = os.path.expanduser(output_dir_path)
 if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-datadir = '/..Path to human img data folder../'
+datadir = 'in_faces/'
 dataset = facenet.get_dataset(datadir)
 
 print('Creating networks and loading parameters')
 with tf.Graph().as_default():
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+    #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+    #sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+    sess = tf.Session(config=tf.ConfigProto( log_device_placement=False))
     with sess.as_default():
-        pnet, rnet, onet = detect_face.create_mtcnn(sess, './Path to det1.npy,..')
+        pnet, rnet, onet = detect_face.create_mtcnn(sess, '../facenet/src/align')
 
-minsize = 20  # minimum size of face
+minsize = 60  # minimum size of face
 threshold = [0.6, 0.7, 0.7]  # three steps's threshold
 factor = 0.709  # scale factor
 margin = 44
@@ -46,6 +47,7 @@ with open(bounding_boxes_filename, "w") as text_file:
         output_class_dir = os.path.join(output_dir, cls.name)
         if not os.path.exists(output_class_dir):
             os.makedirs(output_class_dir)
+            
         for image_path in cls.image_paths:
             nrof_images_total += 1
             filename = os.path.splitext(os.path.split(image_path)[1])[0]
@@ -73,9 +75,14 @@ with open(bounding_boxes_filename, "w") as text_file:
                     nrof_faces = bounding_boxes.shape[0]
                     print('detected_face: %d' % nrof_faces)
                     if nrof_faces > 0:
+                        
+                        
                         det = bounding_boxes[:, 0:4]
                         img_size = np.asarray(img.shape)[0:2]
                         if nrof_faces > 1:
+                            print('more than 1 faces "%d"' % nrof_faces)
+                            continue
+                            """
                             bounding_box_size = (det[:, 2] - det[:, 0]) * (det[:, 3] - det[:, 1])
                             img_center = img_size / 2
                             offsets = np.vstack([(det[:, 0] + det[:, 2]) / 2 - img_center[1],
@@ -83,6 +90,7 @@ with open(bounding_boxes_filename, "w") as text_file:
                             offset_dist_squared = np.sum(np.power(offsets, 2.0), 0)
                             index = np.argmax(bounding_box_size - offset_dist_squared * 2.0)  # some extra weight on the centering
                             det = det[index, :]
+                            """
                         det = np.squeeze(det)
                         bb_temp = np.zeros(4, dtype=np.int32)
 
@@ -92,11 +100,15 @@ with open(bounding_boxes_filename, "w") as text_file:
                         bb_temp[3] = det[3]
 
                         cropped_temp = img[bb_temp[1]:bb_temp[3], bb_temp[0]:bb_temp[2], :]
-                        scaled_temp = misc.imresize(cropped_temp, (image_size, image_size), interp='bilinear')
+                        try:
+                            scaled_temp = misc.imresize(cropped_temp, (image_size, image_size), interp='bilinear')
 
-                        nrof_successfully_aligned += 1
-                        misc.imsave(output_filename, scaled_temp)
-                        text_file.write('%s %d %d %d %d\n' % (output_filename, bb_temp[0], bb_temp[1], bb_temp[2], bb_temp[3]))
+                            nrof_successfully_aligned += 1
+                            misc.imsave(output_filename, scaled_temp)
+                            text_file.write('%s %d %d %d %d\n' % (output_filename, bb_temp[0], bb_temp[1], bb_temp[2], bb_temp[3]))
+                        except Exception as e:
+                            print(e, output_filename, "Ignored")
+                            continue
                     else:
                         print('Unable to align "%s"' % image_path)
                         text_file.write('%s\n' % (output_filename))
