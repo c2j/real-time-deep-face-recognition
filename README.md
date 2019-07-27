@@ -1,5 +1,7 @@
 # real-time-deep-face-recogniton
 
+Face Register
+
 Real-time face recognition program using Google's facenet.
 * [youtube video](https://www.youtube.com/watch?v=T6czH6DLhC4)
 ## Inspiration
